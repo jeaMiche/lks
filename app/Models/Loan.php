@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\LoanPayment;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 
 class Loan extends Model
 {
@@ -19,6 +21,7 @@ class Loan extends Model
         'status',
         'purpose',
         'monthly_installment',
+        'outstanding_balance',
         'created_by',
         'updated_by',
         'reviewed_by',
@@ -28,10 +31,11 @@ class Loan extends Model
     ];
 
     protected $casts = [
-        'amount'               => 'decimal:2',
-        'monthly_installment'  => 'decimal:2',
-        'reviewed_at'          => 'datetime',
-        'approved_at'          => 'datetime',
+        'amount'              => 'decimal:2',
+        'monthly_installment' => 'decimal:2',
+        'outstanding_balance' => 'decimal:2',
+        'reviewed_at'         => 'datetime',
+        'approved_at'         => 'datetime',
     ];
 
     // ─── RELASI ──────────────────────────────────────────
@@ -47,44 +51,82 @@ class Loan extends Model
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
+    public function payments()
+    {
+        return $this->hasMany(LoanPayment::class);
+    }
 
-    // ─── AMORTISASI (Rumus Flat — Mudah Dihafal!) ────────
-    // Cicilan = (Pokok + Total Bunga) / Tenor
+    // ─── AMORTISASI ──────────────────────────────────────
     public function calculateInstallment(): float
     {
-        // Guard: kalau data kosong, return 0
         if (!$this->amount || !$this->tenor_months || !$this->interest_rate) {
             return 0;
         }
 
-        $monthlyRate = $this->interest_rate / 100 / 12;
+        $r = $this->interest_rate / 100 / 12;
+        $n = $this->tenor_months;
+        $p = $this->amount;
 
-        // Kalau bunga 0%, pakai pembagian biasa
-        if ($monthlyRate == 0) {
-            return round($this->amount / $this->tenor_months, 2);
-        }
+        if ($r == 0) return round($p / $n, 2);
 
-        $factor = pow(1 + $monthlyRate, $this->tenor_months);
+        $f = pow(1 + $r, $n);
+        if (($f - 1) == 0) return round($p / $n, 2);
 
-        // Guard: kalau factor - 1 = 0 (tidak mungkin tapi aman)
-        if (($factor - 1) == 0) {
-            return round($this->amount / $this->tenor_months, 2);
-        }
-
-        return round($this->amount * ($monthlyRate * $factor) / ($factor - 1), 2);
+        return round($p * ($r * $f) / ($f - 1), 2);
     }
 
-    // ─── BOOT — Auto hitung cicilan sebelum disimpan ─────
+    // ─── BOOT ────────────────────────────────────────────
     protected static function booted(): void
     {
         static::creating(function (Loan $loan) {
             $loan->monthly_installment = $loan->calculateInstallment();
+            $loan->outstanding_balance = $loan->amount;
         });
 
         static::updating(function (Loan $loan) {
             if ($loan->isDirty(['amount', 'tenor_months', 'interest_rate'])) {
                 $loan->monthly_installment = $loan->calculateInstallment();
             }
+
+            // ─── AUDIT LOG ───────────────────────────────
+            if ($loan->isDirty('status')) {
+                Log::info('Loan status changed', [
+                    'loan_id'    => $loan->id,
+                    'old_status' => $loan->getOriginal('status'),
+                    'new_status' => $loan->status,
+                    'by_user'    => auth()->id(),
+                    'at'         => now(),
+                ]);
+            }
         });
+
+        static::deleted(function (Loan $loan) {
+            Log::info('Loan soft deleted', [
+                'loan_id' => $loan->id,
+                'by_user' => auth()->id(),
+                'at'      => now(),
+            ]);
+        });
+
+        static::restored(function (Loan $loan) {
+            Log::info('Loan restored', [
+                'loan_id' => $loan->id,
+                'by_user' => auth()->id(),
+                'at'      => now(),
+            ]);
+        });
+    }
+
+    // ─── HELPER ──────────────────────────────────────────
+    public static function hasActiveLoan(string $userId): bool
+    {
+        return self::where('user_id', $userId)
+            ->whereIn('status', ['pending', 'reviewed', 'approved', 'disbursed'])
+            ->exists();
+    }
+
+    public function isLunas(): bool
+    {
+        return ($this->outstanding_balance ?? 0) <= 0;
     }
 }

@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids; // ← tambah ini
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasUuids; // ← tambah HasUuids
+    use HasApiTokens, HasFactory, Notifiable, HasUuids; // ← tambah HasUuids
 
     protected $fillable = [
         'name',

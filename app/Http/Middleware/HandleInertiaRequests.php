@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use App\Models\Loan;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -27,21 +28,25 @@ class HandleInertiaRequests extends Middleware
      *
      * @return array<string, mixed>
      */
-    // app/Http/Middleware/HandleInertiaRequests.php
     public function share(Request $request): array
     {
+        $user = $request->user();
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user() ? [
-                    'id'              => $request->user()->id,
-                    'name'            => $request->user()->name,
-                    'email'           => $request->user()->email,
-                    'role'            => $request->user()->role,
-                    'business_name'   => $request->user()->business_name,
-                    'monthly_revenue' => $request->user()->monthly_revenue,
+                'user' => $user ? [
+                    'id'              => $user->id,
+                    'name'            => $user->name,
+                    'email'           => $user->email,
+                    'role'            => $user->role,
+                    'business_name'   => $user->business_name,
+                    'monthly_revenue' => $user->monthly_revenue,
                 ] : null,
             ],
+            'canApplyLoan' => $user
+                ? !Loan::hasActiveLoan($user->id)
+                : false,
         ];
     }
 }

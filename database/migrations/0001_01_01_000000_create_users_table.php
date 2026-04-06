@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->enum('role', ['borrower', 'analyst', 'admin'])->default('borrower');
+            $table->enum('role', ['borrower', 'admin'])->default('borrower');
             $table->string('business_name')->nullable();
             $table->decimal('monthly_revenue', 15, 2)->nullable();
             $table->rememberToken();

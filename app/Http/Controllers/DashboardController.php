@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Models\User;
+
 
 class DashboardController extends Controller
 {

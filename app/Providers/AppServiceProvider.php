@@ -28,12 +28,11 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
-        Gate::define('is-analyst', fn($user) => $user->role === 'analyst');
         Gate::define('is-admin',   fn($user) => $user->role === 'admin');
         Gate::define('is-borrower', fn($user) => $user->role === 'borrower');
 
         // Gate untuk aksi spesifik
-        Gate::define('review-loan', fn($user) => in_array($user->role, ['analyst', 'admin']));
+        Gate::define('review-loan', fn($user) => in_array($user->role, ['admin']));
         Gate::define('approve-loan', fn($user) => $user->role === 'admin');
     }
 }
